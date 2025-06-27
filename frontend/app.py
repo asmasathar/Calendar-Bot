@@ -232,7 +232,7 @@ with col1:
                 • Check your availability<br>
                 • Schedule meetings and appointments<br>
                 • Manage your calendar naturally<br><br>
-                Try asking me something like "Am I free tomorrow afternoon?" or "Book a meeting with Sarah next week"
+                Try asking me something like "Check availability for 3pm tomorrow?" or "Book a meeting with Sarah next week"
             </div>
             """, unsafe_allow_html=True)
         
@@ -321,7 +321,7 @@ example_col1, example_col2, example_col3 = st.columns(3)
 with example_col1:
     if st.button("📅 Check Availability"):
         if api_healthy:
-            example_prompt = "Am I free tomorrow afternoon?"
+            example_prompt = "Check availability for tomorrow afternoon."
             st.session_state.messages.append({"role": "user", "content": example_prompt, "timestamp": datetime.now().isoformat()})
             with st.spinner("Processing..."):
                 response_data = send_message_to_agent(example_prompt)
@@ -341,7 +341,7 @@ with example_col2:
 with example_col3:
     if st.button("🔍 Find Time Slots"):
         if api_healthy:
-            example_prompt = "When am I free this week for a 30-minute call?"
+            example_prompt = "List available 30-minute time slots for this week."
             st.session_state.messages.append({"role": "user", "content": example_prompt, "timestamp": datetime.now().isoformat()})
             with st.spinner("Processing..."):
                 response_data = send_message_to_agent(example_prompt)
