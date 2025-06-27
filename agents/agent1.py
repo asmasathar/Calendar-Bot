@@ -478,8 +478,7 @@ def book_meeting(text: str, user_timezone: str = DEFAULT_TIMEZONE) -> str:
             dt.isoformat(),
             info['duration_minutes'],
             info['title'],
-            user_timezone=user_timezone,
-            location=info.get('location')
+            user_timezone=user_timezone
         )
         
         if isinstance(event, dict) and "error" in event:

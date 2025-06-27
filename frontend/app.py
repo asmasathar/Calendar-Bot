@@ -4,6 +4,7 @@ import json
 import uuid
 from datetime import datetime
 import time
+import pytz
 
 # Page configuration
 st.set_page_config(
@@ -75,7 +76,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # FastAPI backend URL
-API_BASE_URL = st.secrets.get("API_BASE_URL", "http://localhost:8000")
+API_BASE_URL = "https://calendar-bot-o41f.onrender.com"
+
+# Timezone selection
+if "timezone" not in st.session_state:
+    st.session_state["timezone"] = "Asia/Kolkata"
+timezones = pytz.all_timezones
+st.sidebar.header("🌐 Timezone Settings")
+st.session_state["timezone"] = st.sidebar.selectbox(
+    "Select your timezone:",
+    options=timezones,
+    index=timezones.index(st.session_state["timezone"])
+)
 
 # Initialize session state
 if "session_id" not in st.session_state:
@@ -106,7 +118,8 @@ def send_message_to_agent(message: str):
     try:
         payload = {
             "message": message,
-            "session_id": st.session_state.session_id
+            "session_id": st.session_state.session_id,
+            "timezone": st.session_state["timezone"]
         }
         
         response = requests.post(

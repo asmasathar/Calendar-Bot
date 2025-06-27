@@ -30,6 +30,7 @@ app.add_middleware(
 class ChatMessage(BaseModel):
     message: str
     session_id: Optional[str] = "default"
+    timezone: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
@@ -61,6 +62,7 @@ async def chat_with_agent(chat_message: ChatMessage):
     try:
         user_input = chat_message.message.strip()
         session_id = chat_message.session_id
+        user_timezone = chat_message.timezone or "Asia/Kolkata"
         
         if not user_input:
             return ChatResponse(
@@ -86,7 +88,8 @@ async def chat_with_agent(chat_message: ChatMessage):
         # Process with your agent
         result = agent_app.invoke({
             "input": user_input, 
-            "steps": []
+            "steps": [],
+            "user_timezone": user_timezone
         })
         
         agent_response = result['steps'][-1].content if result['steps'] else "I'm sorry, I couldn't process that request."
