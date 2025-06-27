@@ -312,21 +312,41 @@ def extract_availability_request(text: str) -> Dict[str, Any]:
         'time_end': time_end
     }
 
+def suggest_alternative_times(date: str, conflicts: List[Dict]) -> str:
+    """Suggest alternative available times (rephrased, no 'you'/'your', and proper duration units)"""
+    try:
+        base_date = datetime.strptime(date, "%Y-%m-%d")
+        available_slots = []
+        for hour in range(9, 18):
+            slot_start = base_date.replace(hour=hour, minute=0)
+            slot_end = slot_start + timedelta(hours=1)
+            is_free = True
+            for conflict in conflicts:
+                conflict_start = datetime.fromisoformat(conflict['start'].replace('Z', '+00:00'))
+                conflict_end = datetime.fromisoformat(conflict['end'].replace('Z', '+00:00'))
+                if (slot_start < conflict_end and slot_end > conflict_start):
+                    is_free = False
+                    break
+            if is_free:
+                available_slots.append(slot_start.strftime("%I:%M %p"))
+        if available_slots:
+            return "Available slots include: " + ", ".join(available_slots[:3])
+        else:
+            return "No available slots found for this day."
+    except Exception:
+        return "Could not generate alternative times."
+
 def check_availability_smart(text: str, user_timezone: str = DEFAULT_TIMEZONE) -> str:
-    """Smart availability checking with private details removed"""
+    """Smart availability checking with neutral phrasing and proper duration units"""
     availability_info = extract_availability_request(text)
-    
     date_str = availability_info['date']
     if not date_str:
         date_str = 'today'
-    
     parsed_date = parse_relative_date(date_str)
     if not parsed_date:
-        return "I couldn't understand the date. Could you specify it more clearly?"
-    
+        return "The date could not be understood. Please specify more clearly."
     start_time = availability_info['time_start']
     end_time = availability_info['time_end']
-    
     if not start_time and not end_time:
         start_time = "09:00"
         end_time = "17:00"
@@ -342,64 +362,28 @@ def check_availability_smart(text: str, user_timezone: str = DEFAULT_TIMEZONE) -
             time_desc = f"from {start_time} onwards"
     else:
         time_desc = f"from {start_time} to {end_time}"
-    
     try:
         start_dt = datetime.strptime(f"{parsed_date} {start_time}", "%Y-%m-%d %H:%M")
         end_dt = datetime.strptime(f"{parsed_date} {end_time}", "%Y-%m-%d %H:%M")
-        
         result = check_availability(
             start_dt.isoformat(),
             end_dt.isoformat(),
             user_timezone=user_timezone
         )
-        
         if isinstance(result, dict) and "error" in result:
-            return f"❌ Error checking availability: {result['error']}"
-        
+            return f"Error checking availability: {result['error']}"
         display_date = start_dt.strftime("%A, %B %d, %Y")
-        
         if result.get("available"):
-            return f"✅ Yes, you're free on {display_date} {time_desc}!"
+            return f"Not available on {display_date} {time_desc}."
         else:
             conflicts = result.get("conflicts", [])
             suggestion = suggest_alternative_times(parsed_date, conflicts)
-            return f"❌ You're busy on {display_date} {time_desc}.\n\n💡 Alternative times available:\n{suggestion}"
-                
+            return f"Not available on {display_date} {time_desc}. {suggestion}"
     except Exception as e:
-        return f"❌ Error checking availability: {str(e)}"
-
-def suggest_alternative_times(date: str, conflicts: List[Dict]) -> str:
-    """Suggest alternative available times"""
-    try:
-        base_date = datetime.strptime(date, "%Y-%m-%d")
-        available_slots = []
-        
-        for hour in range(9, 18):
-            slot_start = base_date.replace(hour=hour, minute=0)
-            slot_end = slot_start + timedelta(hours=1)
-            
-            is_free = True
-            for conflict in conflicts:
-                conflict_start = datetime.fromisoformat(conflict['start'].replace('Z', '+00:00'))
-                conflict_end = datetime.fromisoformat(conflict['end'].replace('Z', '+00:00'))
-                
-                if (slot_start < conflict_end and slot_end > conflict_start):
-                    is_free = False
-                    break
-            
-            if is_free:
-                available_slots.append(slot_start.strftime("%I:%M %p"))
-        
-        if available_slots:
-            return "• " + "\n• ".join(available_slots[:3])
-        else:
-            return "No available slots found for this day."
-            
-    except Exception:
-        return "Could not generate alternative times."
+        return f"Error checking availability: {str(e)}"
 
 def simple_extract_booking_info(text: str) -> Dict[str, Any]:
-    """Simple extraction without LLM"""
+    """Simple extraction without LLM, with improved duration parsing"""
     info = {
         'title': None,
         'date': None,
@@ -407,9 +391,7 @@ def simple_extract_booking_info(text: str) -> Dict[str, Any]:
         'duration_minutes': None,
         'location': None
     }
-    
     text_lower = text.lower()
-    
     title_patterns = [
         r'meeting with ([^,\s]+)',
         r'call with ([^,\s]+)',
@@ -417,13 +399,11 @@ def simple_extract_booking_info(text: str) -> Dict[str, Any]:
         r'schedule ([\w\s]+)',
         r'book ([\w\s]+)',
     ]
-    
     for pattern in title_patterns:
         match = re.search(pattern, text_lower)
         if match:
             info['title'] = match.group(1).strip().title()
             break
-    
     # Enhanced date extraction for "next week tuesday" patterns
     if 'next week' in text_lower:
         weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
@@ -435,20 +415,27 @@ def simple_extract_booking_info(text: str) -> Dict[str, Any]:
         date_match = re.search(r'\b(today|tomorrow|next \w+|this \w+|\w+ \d+|coming \w+|\d+(?:st|nd|rd|th)?)', text_lower)
         if date_match:
             info['date'] = parse_relative_date(date_match.group(0))
-    
     time_match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:am|pm))', text_lower)
     if time_match:
         info['time'] = parse_time_input(time_match.group(1))
-    
-    duration_match = re.search(r'(\d+)\s*(hour|hr|minute|min)s?', text_lower)
+    # Improved duration parsing
+    duration_match = re.search(r'(half an hour|30 ?min|1 ?hour|\d+ ?(hour|hr|minute|min)s?)', text_lower)
     if duration_match:
-        num = int(duration_match.group(1))
-        unit = duration_match.group(2)
-        if unit in ['hour', 'hr']:
-            info['duration_minutes'] = num * 60
+        duration_str = duration_match.group(0)
+        if 'half an hour' in duration_str or '30' in duration_str:
+            info['duration_minutes'] = 30
+        elif '1 hour' in duration_str or '1hour' in duration_str:
+            info['duration_minutes'] = 60
         else:
-            info['duration_minutes'] = num
-    
+            num_match = re.search(r'\d+', duration_str)
+            unit_match = re.search(r'(hour|hr|minute|min)', duration_str)
+            if num_match and unit_match:
+                num = int(num_match.group(0))
+                unit = unit_match.group(1)
+                if unit in ['hour', 'hr']:
+                    info['duration_minutes'] = num * 60
+                else:
+                    info['duration_minutes'] = num
     return info
 
 def book_meeting(text: str, user_timezone: str = DEFAULT_TIMEZONE) -> str:

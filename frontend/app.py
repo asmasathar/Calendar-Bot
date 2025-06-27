@@ -64,14 +64,19 @@ st.markdown("""
         font-weight: bold;
     }
     
-    .feature-card {
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #007bff;
-        margin: 0.5rem 0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
+   .feature-card {
+    background-color: rgb(26, 28, 36);
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 4px solid #007bff;
+    margin: 0.5rem 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+    
+    
+
+
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -219,23 +224,20 @@ with col1:
     
     with chat_container:
         st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-        
-        # Display welcome message if no messages
+        # Only show welcome message if no messages, and do not show a blank container
         if not st.session_state.messages:
             st.markdown("""
             <div class="assistant-message">
                 🤖 Hi! I'm your AI Calendar Assistant. I can help you:<br>
-                • Check your availability<br>
+                • Check availability<br>
                 • Schedule meetings and appointments<br>
-                • Manage your calendar naturally<br><br>
-                Try asking me something like "Am I free tomorrow afternoon?" or "Book a meeting with Sarah next week"
+                • Manage the calendar naturally<br><br>
+                Try asking something like "Am I free tomorrow afternoon?" or "Book a meeting with Sarah next week"
             </div>
             """, unsafe_allow_html=True)
-        
-        # Display conversation history
-        for message in st.session_state.messages:
-            display_message(message["content"], message["role"] == "user")
-        
+        else:
+            for message in st.session_state.messages:
+                display_message(message["content"], message["role"] == "user")
         st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
@@ -270,8 +272,9 @@ with input_container:
         col_input, col_send = st.columns([4, 1])
         
         with col_input:
+            st.markdown('<div style="background: #fffbe6; border: 2px solid #ffd700; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; font-weight: bold; font-size: 1.1rem;">Type your message here...</div>', unsafe_allow_html=True)
             user_input = st.text_input(
-                "Type your message here...",
+                "",
                 placeholder="e.g., 'Am I free tomorrow at 3pm?' or 'Schedule a meeting with John'",
                 key="user_input"
             )
