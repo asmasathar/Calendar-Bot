@@ -195,15 +195,15 @@ with st.sidebar:
     st.markdown("""
     <div class="feature-card">
         <strong>📅 Availability Check</strong><br>
-        "Am I free tomorrow at 2pm?"
+        Check if a specific time slot is available, e.g., "Is there availability tomorrow at 2pm?"
     </div>
     <div class="feature-card">
         <strong>📝 Meeting Booking</strong><br>
-        "Schedule a call with John next Friday"
+        Schedule a meeting, e.g., "Book a meeting with John next Friday"
     </div>
     <div class="feature-card">
         <strong>💬 Natural Language</strong><br>
-        Speak naturally, I'll understand!
+        Use natural language to manage the calendar.
     </div>
     """, unsafe_allow_html=True)
 
@@ -276,7 +276,7 @@ with input_container:
         with col_input:
             user_input = st.text_input(
                 "Type your message here...",
-                placeholder="e.g., 'Am I free tomorrow at 3pm?' or 'Schedule a meeting with John'",
+                placeholder="e.g., 'Check availability for tomorrow at 3pm' or 'Book a meeting with John on Friday'",
                 key="user_input"
             )
         
