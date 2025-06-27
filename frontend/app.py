@@ -224,20 +224,23 @@ with col1:
     
     with chat_container:
         st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-        # Only show welcome message if no messages, and do not show a blank container
+        
+        # Display welcome message if no messages
         if not st.session_state.messages:
             st.markdown("""
             <div class="assistant-message">
                 🤖 Hi! I'm your AI Calendar Assistant. I can help you:<br>
-                • Check availability<br>
+                • Check your availability<br>
                 • Schedule meetings and appointments<br>
-                • Manage the calendar naturally<br><br>
-                Try asking something like "Am I free tomorrow afternoon?" or "Book a meeting with Sarah next week"
+                • Manage your calendar naturally<br><br>
+                Try asking me something like "Am I free tomorrow afternoon?" or "Book a meeting with Sarah next week"
             </div>
             """, unsafe_allow_html=True)
-        else:
-            for message in st.session_state.messages:
-                display_message(message["content"], message["role"] == "user")
+        
+        # Display conversation history
+        for message in st.session_state.messages:
+            display_message(message["content"], message["role"] == "user")
+        
         st.markdown('</div>', unsafe_allow_html=True)
 
 with col2:
@@ -272,9 +275,8 @@ with input_container:
         col_input, col_send = st.columns([4, 1])
         
         with col_input:
-            st.markdown('<div style="background: #fffbe6; border: 2px solid #ffd700; border-radius: 8px; padding: 0.5rem 1rem; margin-bottom: 0.5rem; font-weight: bold; font-size: 1.1rem;">Type your message here...</div>', unsafe_allow_html=True)
             user_input = st.text_input(
-                "",
+                "Type your message here...",
                 placeholder="e.g., 'Am I free tomorrow at 3pm?' or 'Schedule a meeting with John'",
                 key="user_input"
             )
