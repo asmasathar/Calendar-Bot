@@ -10,7 +10,10 @@ from huggingface_hub import InferenceClient
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from backend.calendar_api import create_event, check_availability
 
-load_dotenv()
+if os.path.exists("/etc/secrets/.env"):
+    load_dotenv("/etc/secrets/.env")
+else:
+    load_dotenv() 
 hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
 client = InferenceClient(

@@ -6,7 +6,7 @@ import re
 from typing import Dict, Any
 
 # Path to your service account JSON file
-SERVICE_ACCOUNT_FILE = "backend/calendarbot-464110-71309e5706d0.json"
+SERVICE_ACCOUNT_FILE = "/etc/secrets/calendarbot.json"
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 CALENDAR_ID = "yourcalendar7@gmail.com"
