@@ -6,7 +6,6 @@ from datetime import datetime
 import time
 import pytz
 
-# Page configuration
 st.set_page_config(
     page_title="📅 AI Calendar Assistant",
     page_icon="🤖",
@@ -14,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+
 st.markdown("""
 <style>
     .main-header {
@@ -159,14 +158,14 @@ def display_message(message, is_user=False):
     else:
         st.markdown(f'<div class="assistant-message">🤖 {message}</div>', unsafe_allow_html=True)
 
-# Main app layout
+
 st.markdown('<div class="main-header"><h1>🤖 AI Calendar Assistant</h1><p>Your intelligent booking companion</p></div>', unsafe_allow_html=True)
 
-# Sidebar
+
 with st.sidebar:
     st.header("📊 Session Info")
     
-    # API Status
+
     api_healthy = check_api_health()
     status_color = "🟢" if api_healthy else "🔴"
     st.write(f"{status_color} **API Status:** {st.session_state.api_status}")
@@ -191,7 +190,7 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
     
-    # Features
+
     st.header("✨ Features")
     st.markdown("""
     <div class="feature-card">
@@ -214,18 +213,18 @@ col1, col2 = st.columns([3, 1])
 with col1:
     st.header("💬 Chat with your Assistant")
     
-    # Display API status warning if needed
+
     if not api_healthy:
         st.error(f"⚠️ Backend API is not responding. Status: {st.session_state.api_status}")
         st.info("Please make sure the FastAPI server is running on the correct port.")
     
-    # Chat container
+
     chat_container = st.container()
     
     with chat_container:
         st.markdown('<div class="chat-container">', unsafe_allow_html=True)
         
-        # Display welcome message if no messages
+
         if not st.session_state.messages:
             st.markdown("""
             <div class="assistant-message">
@@ -237,7 +236,7 @@ with col1:
             </div>
             """, unsafe_allow_html=True)
         
-        # Display conversation history
+
         for message in st.session_state.messages:
             display_message(message["content"], message["role"] == "user")
         
@@ -246,7 +245,7 @@ with col1:
 with col2:
     st.header("📈 Quick Stats")
     
-    # Calculate some basic stats
+
     user_messages = len([m for m in st.session_state.messages if m["role"] == "user"])
     assistant_messages = len([m for m in st.session_state.messages if m["role"] == "assistant"])
     
@@ -256,7 +255,7 @@ with col2:
     with col2_2:
         st.metric("Assistant Replies", assistant_messages)
     
-    # Recent activity
+
     st.subheader("🕐 Recent Activity")
     if st.session_state.messages:
         last_message = st.session_state.messages[-1]
@@ -265,12 +264,12 @@ with col2:
     else:
         st.write("No recent activity")
 
-# Input section
+
 st.markdown("---")
 input_container = st.container()
 
 with input_container:
-    # Create input form
+
     with st.form(key="chat_form", clear_on_submit=True):
         col_input, col_send = st.columns([4, 1])
         
@@ -282,27 +281,27 @@ with input_container:
             )
         
         with col_send:
-            st.write("")  # Add some space
+            st.write("")  
             send_button = st.form_submit_button("Send 📤", use_container_width=True)
     
-    # Handle form submission
+
     if send_button and user_input.strip():
         if not api_healthy:
             st.error("Cannot send message: API is not available")
         else:
-            # Add user message to chat
+   
             st.session_state.messages.append({
                 "role": "user", 
                 "content": user_input,
                 "timestamp": datetime.now().isoformat()
             })
             
-            # Show loading spinner
+ 
             with st.spinner("🤖 Thinking..."):
-                # Send to backend
+               
                 response_data = send_message_to_agent(user_input)
             
-            # Add assistant response to chat
+         
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": response_data["response"],
@@ -310,10 +309,10 @@ with input_container:
                 "timestamp": datetime.now().isoformat()
             })
             
-            # Rerun to update the chat
+            
             st.rerun()
 
-# Example prompts
+
 st.markdown("---")
 st.subheader("💡 Example Prompts")
 
@@ -349,6 +348,6 @@ with example_col3:
             st.session_state.messages.append({"role": "assistant", "content": response_data["response"], "timestamp": datetime.now().isoformat()})
             st.rerun()
 
-# Footer
+
 st.markdown("---")
 st.markdown("**📅 AI Calendar Assistant** | Built with FastAPI + Streamlit + LangGraph")

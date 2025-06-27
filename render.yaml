@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: calendar-backend
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    rootDir: backend
+    envVars:
+      - key: PORT
+        value: 8000

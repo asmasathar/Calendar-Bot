@@ -6,22 +6,18 @@ import sys
 import os
 import logging
 
-# Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Import your agent logic
 from agents.agent1 import app as agent_app, conversation_context
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Calendar Booking Agent API", version="1.0.0")
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,8 +36,6 @@ class ChatResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     message: str
-
-# Store conversation sessions
 conversation_sessions: Dict[str, Dict] = {}
 
 @app.get("/", response_model=HealthResponse)
@@ -70,14 +64,12 @@ async def chat_with_agent(chat_message: ChatMessage):
                 status="success"
             )
         
-        # Initialize session if it doesn't exist
         if session_id not in conversation_sessions:
             conversation_sessions[session_id] = {
                 "messages": [],
                 "context": {}
             }
         
-        # Add user message to session
         conversation_sessions[session_id]["messages"].append({
             "role": "user",
             "content": user_input
@@ -85,7 +77,7 @@ async def chat_with_agent(chat_message: ChatMessage):
         
         logger.info(f"Processing message for session {session_id}: {user_input}")
         
-        # Process with your agent
+       
         result = agent_app.invoke({
             "input": user_input, 
             "steps": [],
@@ -94,13 +86,13 @@ async def chat_with_agent(chat_message: ChatMessage):
         
         agent_response = result['steps'][-1].content if result['steps'] else "I'm sorry, I couldn't process that request."
         
-        # Add agent response to session
+        
         conversation_sessions[session_id]["messages"].append({
             "role": "assistant",
             "content": agent_response
         })
         
-        # Update session context
+        
         conversation_sessions[session_id]["context"] = {
             "last_topic": conversation_context.get('last_topic'),
             "last_date_mentioned": conversation_context.get('last_date_mentioned'),
@@ -154,7 +146,7 @@ async def list_active_sessions():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app", 
+        "main:app",
         host="0.0.0.0", 
         port=8000, 
         reload=True,
