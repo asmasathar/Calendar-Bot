@@ -22,10 +22,18 @@ client = InferenceClient(
 
 DEFAULT_TIMEZONE = "Asia/Kolkata"
 
+# Enhanced conversation context to track all details
 conversation_context = {
     'last_topic': None,
     'last_date_mentioned': None,
-    'last_time_mentioned': None
+    'last_time_mentioned': None,
+    'last_duration_mentioned': None,
+    'last_title_mentioned': None,
+    'last_location_mentioned': None,
+    'available_slots': [],  # Store available slots from last availability check
+    'last_availability_date': None,
+    'booking_in_progress': False,
+    'accumulated_booking_info': {}
 }
 
 def parse_relative_date(date_input, reference_date=None):
@@ -165,6 +173,36 @@ def parse_time_input(time_input):
     except Exception:
         return None
 
+def parse_duration(text: str) -> int:
+    """Parse duration from text and return minutes"""
+    text_lower = text.lower()
+    
+    # Direct duration mentions
+    duration_match = re.search(r'(half an hour|30 ?min|1 ?hour|\d+ ?(hour|hr|minute|min)s?)', text_lower)
+    if duration_match:
+        duration_str = duration_match.group(0)
+        if 'half an hour' in duration_str or '30' in duration_str:
+            return 30
+        elif '1 hour' in duration_str or '1hour' in duration_str:
+            return 60
+        else:
+            num_match = re.search(r'\d+', duration_str)
+            unit_match = re.search(r'(hour|hr|minute|min)', duration_str)
+            if num_match and unit_match:
+                num = int(num_match.group(0))
+                unit = unit_match.group(1)
+                if unit in ['hour', 'hr']:
+                    return num * 60
+                else:
+                    return num
+    
+    # Just number mentions that could be duration
+    if re.search(r'\b(30|60|90|120)\b', text_lower):
+        num = int(re.search(r'\b(30|60|90|120)\b', text_lower).group(0))
+        return num
+    
+    return None
+
 def is_availability_request(text: str) -> bool:
     availability_keywords = [
         'available', 'free', 'availability', 'busy', 'schedule',
@@ -185,6 +223,16 @@ def is_booking_request(text: str) -> bool:
     ]
     text_lower = text.lower()
     return any(keyword in text_lower for keyword in booking_keywords)
+
+def is_duration_only(text: str) -> bool:
+    """Check if the text is just providing duration information"""
+    text_lower = text.lower().strip()
+    duration_patterns = [
+        r'^\d+\s*(min|minute|minutes|hour|hours|hr)s?$',
+        r'^(half an hour|30 min|1 hour)$',
+        r'^\d+$'  # Just a number
+    ]
+    return any(re.match(pattern, text_lower) for pattern in duration_patterns)
 
 def generate_natural_response(text: str, response_type: str = "casual") -> str:
     try:
@@ -250,7 +298,8 @@ def extract_availability_request(text: str) -> Dict[str, Any]:
         'time_end': time_end
     }
 
-def suggest_alternative_times(date: str, conflicts: List[Dict]) -> str:
+def suggest_alternative_times(date: str, conflicts: List[Dict]) -> List[str]:
+    """Return list of available time slots"""
     try:
         base_date = datetime.strptime(date, "%Y-%m-%d")
         available_slots = []
@@ -265,15 +314,14 @@ def suggest_alternative_times(date: str, conflicts: List[Dict]) -> str:
                     is_free = False
                     break
             if is_free:
-                available_slots.append(slot_start.strftime("%I:%M %p"))
-        if available_slots:
-            return "Available slots include: " + ", ".join(available_slots[:3])
-        else:
-            return "No available slots found for this day."
+                available_slots.append(slot_start.strftime("%H:%M"))
+        return available_slots
     except Exception:
-        return "Could not generate alternative times."
+        return []
 
 def check_availability_smart(text: str, user_timezone: str = DEFAULT_TIMEZONE) -> str:
+    global conversation_context
+    
     availability_info = extract_availability_request(text)
     date_str = availability_info['date']
     if not date_str:
@@ -281,6 +329,7 @@ def check_availability_smart(text: str, user_timezone: str = DEFAULT_TIMEZONE) -
     parsed_date = parse_relative_date(date_str)
     if not parsed_date:
         return "The date could not be understood. Please specify more clearly."
+
     start_time = availability_info['time_start']
     end_time = availability_info['time_end']
     if not start_time and not end_time:
@@ -298,6 +347,7 @@ def check_availability_smart(text: str, user_timezone: str = DEFAULT_TIMEZONE) -
             time_desc = f"from {start_time} onwards"
     else:
         time_desc = f"from {start_time} to {end_time}"
+
     try:
         start_dt = datetime.strptime(f"{parsed_date} {start_time}", "%Y-%m-%d %H:%M")
         end_dt = datetime.strptime(f"{parsed_date} {end_time}", "%Y-%m-%d %H:%M")
@@ -308,17 +358,29 @@ def check_availability_smart(text: str, user_timezone: str = DEFAULT_TIMEZONE) -
         )
         if isinstance(result, dict) and "error" in result:
             return f"Error checking availability: {result['error']}"
+
         display_date = start_dt.strftime("%A, %B %d, %Y")
+        
+        # Store context for potential booking
+        conversation_context['last_availability_date'] = parsed_date
+        
         if result.get("available"):
-            return f"Not available on {display_date} {time_desc}."
+            return f"You're free on {display_date} {time_desc}."
         else:
             conflicts = result.get("conflicts", [])
-            suggestion = suggest_alternative_times(parsed_date, conflicts)
-            return f"Not available on {display_date} {time_desc}. {suggestion}"
+            available_slots = suggest_alternative_times(parsed_date, conflicts)
+            conversation_context['available_slots'] = available_slots
+            
+            if available_slots:
+                slots_text = ", ".join([datetime.strptime(slot, "%H:%M").strftime("%I:%M %p").lstrip('0') for slot in available_slots[:5]])
+                return f"Not available on {display_date} {time_desc}. Available slots: {slots_text}"
+            else:
+                return f"Not available on {display_date} {time_desc}. No available slots found."
     except Exception as e:
         return f"Error checking availability: {str(e)}"
 
-def simple_extract_booking_info(text: str) -> Dict[str, Any]:
+def extract_comprehensive_booking_info(text: str) -> Dict[str, Any]:
+    """Extract all possible booking information from text"""
     info = {
         'title': None,
         'date': None,
@@ -326,10 +388,13 @@ def simple_extract_booking_info(text: str) -> Dict[str, Any]:
         'duration_minutes': None,
         'location': None
     }
+    
     text_lower = text.lower()
+    
+    # Extract title/subject
     title_patterns = [
-        r'meeting with ([^,\s]+)',
-        r'call with ([^,\s]+)',
+        r'meeting with ([^,\n]+)',
+        r'call with ([^,\n]+)',
         r'([\w\s]+) meeting',
         r'schedule ([\w\s]+)',
         r'book ([\w\s]+)',
@@ -339,6 +404,8 @@ def simple_extract_booking_info(text: str) -> Dict[str, Any]:
         if match:
             info['title'] = match.group(1).strip().title()
             break
+    
+    # Extract date
     if 'next week' in text_lower:
         weekdays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
         for day in weekdays:
@@ -349,96 +416,159 @@ def simple_extract_booking_info(text: str) -> Dict[str, Any]:
         date_match = re.search(r'\b(today|tomorrow|next \w+|this \w+|\w+ \d+|coming \w+|\d+(?:st|nd|rd|th)?)', text_lower)
         if date_match:
             info['date'] = parse_relative_date(date_match.group(0))
+    
+    # Extract time
     time_match = re.search(r'(\d{1,2}(?::\d{2})?\s*(?:am|pm))', text_lower)
     if time_match:
         info['time'] = parse_time_input(time_match.group(1))
-    duration_match = re.search(r'(half an hour|30 ?min|1 ?hour|\d+ ?(hour|hr|minute|min)s?)', text_lower)
-    if duration_match:
-        duration_str = duration_match.group(0)
-        if 'half an hour' in duration_str or '30' in duration_str:
-            info['duration_minutes'] = 30
-        elif '1 hour' in duration_str or '1hour' in duration_str:
-            info['duration_minutes'] = 60
-        else:
-            num_match = re.search(r'\d+', duration_str)
-            unit_match = re.search(r'(hour|hr|minute|min)', duration_str)
-            if num_match and unit_match:
-                num = int(num_match.group(0))
-                unit = unit_match.group(1)
-                if unit in ['hour', 'hr']:
-                    info['duration_minutes'] = num * 60
-                else:
-                    info['duration_minutes'] = num
+    
+    # Extract duration
+    info['duration_minutes'] = parse_duration(text)
+    
     return info
 
-def book_meeting(text: str, user_timezone: str = DEFAULT_TIMEZONE) -> str:
-    info = simple_extract_booking_info(text)
+def get_accumulated_booking_info() -> Dict[str, Any]:
+    """Get all booking information from context and current accumulated data"""
+    global conversation_context
+    
+    info = conversation_context['accumulated_booking_info'].copy()
+    
+    # Use context data as fallback
+    if not info.get('date') and conversation_context['last_date_mentioned']:
+        info['date'] = parse_relative_date(conversation_context['last_date_mentioned'])
+    if not info.get('date') and conversation_context['last_availability_date']:
+        info['date'] = conversation_context['last_availability_date']
+    
+    if not info.get('time') and conversation_context['last_time_mentioned']:
+        info['time'] = conversation_context['last_time_mentioned']
+    
+    if not info.get('duration_minutes') and conversation_context['last_duration_mentioned']:
+        info['duration_minutes'] = conversation_context['last_duration_mentioned']
+    
+    if not info.get('title') and conversation_context['last_title_mentioned']:
+        info['title'] = conversation_context['last_title_mentioned']
+    
+    return info
+
+def update_accumulated_booking_info(new_info: Dict[str, Any]):
+    """Update the accumulated booking information"""
+    global conversation_context
+    
+    for key, value in new_info.items():
+        if value is not None:
+            conversation_context['accumulated_booking_info'][key] = value
+
+def book_meeting_smart(text: str, user_timezone: str = DEFAULT_TIMEZONE) -> str:
+    global conversation_context
+    
+    # Extract info from current text
+    current_info = extract_comprehensive_booking_info(text)
+    
+    # Check if this is just duration information
+    if is_duration_only(text):
+        duration = parse_duration(text)
+        if duration:
+            current_info = {'duration_minutes': duration}
+    
+    # Update accumulated information
+    update_accumulated_booking_info(current_info)
+    
+    # Get all available information
+    complete_info = get_accumulated_booking_info()
+    
+    # Check what's missing
     missing_fields = []
-    if not info['title']:
-        missing_fields.append("title/description")
-    if not info['date']:
+    if not complete_info.get('title'):
+        missing_fields.append("title")
+    if not complete_info.get('date'):
         missing_fields.append("date")
-    if not info['time']:
+    if not complete_info.get('time'):
         missing_fields.append("time")
-    if not info['duration_minutes']:
+    if not complete_info.get('duration_minutes'):
         missing_fields.append("duration")
+    
     if missing_fields:
-        return f"To schedule this meeting, I need more information about: {', '.join(missing_fields)}. " \
-               f"Please provide all necessary details in one message."
+        conversation_context['booking_in_progress'] = True
+        return f"Need {', '.join(missing_fields)}."
+    
+    # All information available, create the meeting
     try:
-        datetime_str = f"{info['date']} {info['time']}"
+        datetime_str = f"{complete_info['date']} {complete_info['time']}"
         dt = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
+        
         event = create_event(
             dt.isoformat(),
-            info['duration_minutes'],
-            info['title'],
+            complete_info['duration_minutes'],
+            complete_info['title'],
             user_timezone=user_timezone
         )
+        
         if isinstance(event, dict) and "error" in event:
             return f"❌ {event['error']}"
-        return f"✅ Meeting '{info['title']}' scheduled for {dt.strftime('%A, %B %d at %I:%M %p')}!"
+        
+        # Clear accumulated info after successful booking
+        conversation_context['accumulated_booking_info'] = {}
+        conversation_context['booking_in_progress'] = False
+        
+        return f"✅ Meeting '{complete_info['title']}' scheduled for {dt.strftime('%A, %B %d at %I:%M %p')} ({complete_info['duration_minutes']} minutes)!"
     except Exception as e:
         return f"❌ Error creating meeting: {str(e)}"
 
 def update_context(text: str, topic: str):
     global conversation_context
     conversation_context['last_topic'] = topic
-    date_info = extract_availability_request(text)
-    if date_info['date']:
-        conversation_context['last_date_mentioned'] = date_info['date']
-    if date_info['time_start']:
-        conversation_context['last_time_mentioned'] = date_info['time_start']
+    
+    # Extract and store all relevant information
+    info = extract_comprehensive_booking_info(text)
+    availability_info = extract_availability_request(text)
+    
+    if info['date'] or availability_info['date']:
+        conversation_context['last_date_mentioned'] = info['date'] or availability_info['date']
+    if info['time'] or availability_info['time_start']:
+        conversation_context['last_time_mentioned'] = info['time'] or availability_info['time_start']
+    if info['duration_minutes']:
+        conversation_context['last_duration_mentioned'] = info['duration_minutes']
+    if info['title']:
+        conversation_context['last_title_mentioned'] = info['title']
 
 def process_contextual_input(text: str, user_timezone: str = DEFAULT_TIMEZONE) -> str:
+    global conversation_context
     text_lower = text.lower().strip()
-    if text_lower in ['what about day after tomorrow', 'day after tomorrow', 'and day after']:
-        if conversation_context['last_topic'] == 'availability':
-            return check_availability_smart('day after tomorrow', user_timezone)
-        else:
-            return generate_natural_response(text, "availability")
-    contextual_patterns = [
+    
+    # Handle continuation phrases
+    continuation_patterns = [
         r'^(what about|and|how about)',
-        r'^(that day|then|after that)'
+        r'^(that day|then|after that)',
+        r'^(day after tomorrow|day after)$'
     ]
-    for pattern in contextual_patterns:
+    
+    for pattern in continuation_patterns:
         if re.match(pattern, text_lower):
             if conversation_context['last_topic'] == 'availability':
                 return check_availability_smart(text, user_timezone)
-            elif conversation_context['last_topic'] == 'booking':
-                return book_meeting(text, user_timezone)
+            elif conversation_context['last_topic'] == 'booking' or conversation_context['booking_in_progress']:
+                return book_meeting_smart(text, user_timezone)
+    
+    # If booking is in progress, treat most inputs as booking-related
+    if conversation_context['booking_in_progress']:
+        return book_meeting_smart(text, user_timezone)
+    
     return None
 
 def process_input(text: str, user_timezone: str = DEFAULT_TIMEZONE) -> str:
     text = text.strip()
+    
+    # Check for contextual input first
     contextual_response = process_contextual_input(text, user_timezone)
     if contextual_response:
         return contextual_response
+    
     if is_availability_request(text):
         update_context(text, 'availability')
         return check_availability_smart(text, user_timezone)
     elif is_booking_request(text):
         update_context(text, 'booking')
-        return book_meeting(text, user_timezone)
+        return book_meeting_smart(text, user_timezone)
     else:
         update_context(text, 'casual')
         return generate_natural_response(text, "casual")
